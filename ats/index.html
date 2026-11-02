@@ -6,15 +6,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-:root{--bg1:#0b1f3a;--bg2:#123a63;--bg3:#0f5b6b;--glass:rgba(255,255,255,.09);--glass2:rgba(255,255,255,.16);--line:rgba(255,255,255,.18);--tx:#eef4fb;--mut:#a9bdd3;--acc:#3fc1c9;--acc2:#5b8def;--ok:#3ccf8e;--warn:#f5b84b;--bad:#ef6b73;--sh:0 8px 32px rgba(0,0,0,.25)}
-:root[data-theme=light]{--bg1:#dfe9f5;--bg2:#eef3fa;--bg3:#d4ecef;--glass:rgba(255,255,255,.55);--glass2:rgba(255,255,255,.8);--line:rgba(15,40,70,.12);--tx:#0f2440;--mut:#5a6f88;--sh:0 8px 28px rgba(20,50,90,.12)}
+:root{color-scheme:dark;--bg1:#0b1f3a;--bg2:#123a63;--bg3:#0f5b6b;--glass:rgba(255,255,255,.09);--glass2:rgba(255,255,255,.16);--line:rgba(255,255,255,.18);--tx:#eef4fb;--mut:#a9bdd3;--acc:#3fc1c9;--acc2:#5b8def;--ok:#3ccf8e;--warn:#f5b84b;--bad:#ef6b73;--sh:0 8px 32px rgba(0,0,0,.25)}
+:root[data-theme=light]{--bg1:#dfe9f5;--bg2:#eef3fa;--bg3:#d4ecef;--glass:rgba(255,255,255,.55);--glass2:rgba(255,255,255,.8);--line:rgba(15,40,70,.12);--tx:#0f2440;--mut:#5a6f88;color-scheme:light;--sh:0 8px 28px rgba(20,50,90,.12)}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.45 Inter,system-ui,sans-serif;color:var(--tx);min-height:100vh;background:linear-gradient(135deg,var(--bg1),var(--bg2) 50%,var(--bg3));background-attachment:fixed}
 body:before,body:after{content:"";position:fixed;z-index:-1;border-radius:50%;filter:blur(90px);opacity:.45}
 body:before{width:480px;height:480px;background:var(--acc2);top:-120px;left:30%}
 body:after{width:420px;height:420px;background:var(--acc);bottom:-140px;right:-60px}
 .glass{background:var(--glass);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);box-shadow:var(--sh)}
-.app{display:grid;grid-template-columns:240px 1fr;gap:16px;padding:16px;min-height:100vh}
+.app{display:grid;grid-template-columns:240px 1fr;gap:16px;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));min-height:100vh}
 nav{padding:18px 12px;position:sticky;top:16px;height:calc(100vh - 32px);overflow:auto}
 .brand{font-weight:700;font-size:17px;padding:0 10px 16px;display:flex;gap:10px;align-items:center}
 .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-weight:700;color:#fff}
@@ -68,7 +68,7 @@ pre{background:var(--glass);padding:10px;border-radius:8px;overflow:auto;font-si
 <nav class="glass" id="nav"></nav>
 <main><div class="glass top"><div><h1 id="ttl"></h1><div class="mut sm" id="sub"></div></div><div class="row" id="acts"></div></div><div id="view"></div></main>
 </div>
-<div id="ovl"></div><div id="toast"></div>
+<div id="ovl"></div><div id="dlg"></div><div id="toast"></div>
 <script>
 /* ===== Sabitler (Excel "liste" ve "Rol Bazlı" başlıklarından) ===== */
 const ACTIVE=['Başvuru','HR Kısa Liste','HM Kısa Liste','Öngörüşme','Yönetici Görüşmesi','İnsan Kaynakları Görüşmesi','Sınav Aşaması','Üst Yönetim Görüşmesi','Referans Kontrolü','Adli Kontrol Süreci','Kişi Onay','Teklif','İşe Alındı'];
@@ -117,7 +117,8 @@ function seed(){const d=n=>{const x=new Date();x.setDate(x.getDate()-n);return x
 function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}if(!S)S=seed();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Kayıt hatası: '+e.message)}}
 function log(m){S.log.unshift({t:new Date().toISOString(),m});S.log=S.log.slice(0,300)}
-function toast(m){$('toast').innerHTML=`<div class="glass toast">${esc(m)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').innerHTML='',3500)}
+function toast(m){$('toast').innerHTML=`<div class="glass toast">${esc(m)}</div>`;clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').innerHTML='',6000)}
+function ask(m,fn){$('dlg').innerHTML=`<div class="modal" style="z-index:60"><div class="glass" style="width:min(440px,100%)"><p>${esc(m)}</p><p class="row"><button class="btn p" id="dy">Evet</button><button class="btn" onclick="$('dlg').innerHTML=''">Vazgeç</button></p></div></div>`;$('dy').onclick=()=>{$('dlg').innerHTML='';fn()}}
 const posOf=c=>S.pos.find(p=>p.id==c.talepNo)||{};
 const isClosed=st=>CLOSED.includes(st);
 const stTag=s=>`<span class="tag ${s==='İşe Alındı'?'t-ok':isClosed(s)?'t-bad':s==='Teklif'||s==='Kişi Onay'?'t-warn':'t-info'}">${esc(s)}</span>`;
@@ -140,7 +141,7 @@ setInterval(()=>processQueue(),30000);
 
 /* ===== Aşama yönetimi (kurallar) ===== */
 function setStage(c,st,silent){const p=posOf(c);if(c.asama===st)return true;
- if(st==='İşe Alındı'){const h=S.cands.find(x=>x.talepNo==c.talepNo&&x.asama==='İşe Alındı'&&x.id!==c.id);if(h){alert(`Kural 2: ${p.id} talebinde zaten işe alınan aday var (${h.ad}). Her talepte tek aday işe alınır; yeni talep açın.`);return false}}
+ if(st==='İşe Alındı'){const h=S.cands.find(x=>x.talepNo==c.talepNo&&x.asama==='İşe Alındı'&&x.id!==c.id);if(h){toast(`Kural 2: ${p.id} talebinde zaten işe alınan aday var (${h.ad}). Her talepte tek aday işe alınır; yeni talep açın.`);return false}}
  const prev=c.asama;c.asama=st;c.stageDate=today();(c.hist=c.hist||[]).push({t:today(),m:`${prev} → ${st}`});
  const dmap={'Öngörüşme':'ongorusme','Yönetici Görüşmesi':'yoneticiGorusme','Sınav Aşaması':'sinavGonderim','Kişi Onay':'kisiOnay','Teklif':null};const f=dmap[st];if(f&&!c[f])c[f]=today();
  if(st==='Teklif'){p.teklifTarihi=p.teklifTarihi||today();if(c.kisiOnay&&!c.kisiOnayOnay)c.kisiOnayOnay=today()}
@@ -214,11 +215,11 @@ function editPos(id){const p=id?S.pos.find(x=>x.id==id):{id:Math.max(100000,...S
  modal(`<div class="row sp"><h3>${id?'Talep '+p.id:'Yeni İşe Alım Talebi'}</h3><button class="btn s" onclick="closeM()">✕</button></div>${form(P_F,p)}
  ${id?`<h3 style="margin-top:16px">Bu talepteki adaylar (${cs.length})</h3>${cs.map(c=>`<div class="row sp" style="margin:4px 0"><a href="#" style="color:var(--tx)" onclick="closeM();openCand('${c.id}');return false">${esc(c.ad)}</a>${stTag(c.asama)}</div>`).join('')||'<span class="mut">Henüz aday yok.</span>'}`:''}
  <p class="row" style="margin-top:16px"><button class="btn p" onclick="savePos(${id||0},${p.id})">Kaydet</button>${id?`<button class="btn" onclick="closeM();editCand(null,${p.id})">+ Bu talebe aday ekle</button><button class="btn d" onclick="delPos(${p.id})">Sil</button>`:''}</p>`)}
-function savePos(isEdit,pid){const p=isEdit?S.pos.find(x=>x.id==pid):{id:pid};const old=p.durum;readForm(P_F,p);if(!p.ad)return alert('Pozisyon adı zorunlu');
- if(p.durum==='Kapalı'&&old!=='Kapalı'){const o=canClose(p);if(o.length){p.durum=old;return alert(`Kural 7 – Gemiyi en son kaptan terk eder: ${o.length} adaya henüz dönüş yapılmadı (${o.map(c=>c.ad).join(', ')}). Önce süreçlerini sonlandırın.`)}}
+function savePos(isEdit,pid){const p=isEdit?S.pos.find(x=>x.id==pid):{id:pid};const old=p.durum;readForm(P_F,p);if(!p.ad)return toast('Pozisyon adı zorunlu');
+ if(p.durum==='Kapalı'&&old!=='Kapalı'){const o=canClose(p);if(o.length){p.durum=old;return toast(`Kural 7 – Gemiyi en son kaptan terk eder: ${o.length} adaya henüz dönüş yapılmadı (${o.map(c=>c.ad).join(', ')}). Önce süreçlerini sonlandırın.`)}}
  if(p.durum==='İptal')p.asama='İptal';
  if(!isEdit){S.pos.push(p);log(`Yeni talep: ${p.id} ${p.ad}`)}else log(`Talep güncellendi: ${p.id}`);save();closeM();rerender();toast('Kaydedildi')}
-function delPos(id){if(S.cands.some(c=>c.talepNo==id))return alert('Talebe bağlı adaylar var; önce adayları taşıyın/silin.');if(confirm('Talep silinsin mi?')){S.pos=S.pos.filter(p=>p.id!=id);save();closeM();rerender()}}
+function delPos(id){if(S.cands.some(c=>c.talepNo==id))return toast('Talebe bağlı adaylar var; önce adayları taşıyın/silin.');ask('Talep silinsin mi?',()=>{S.pos=S.pos.filter(p=>p.id!=id);save();closeM();rerender()})}
 
 V.cand=()=>{head('Adaylar (Aday Bazlı)','Talep numarası seçildiğinde pozisyon bilgileri otomatik akar.',`<button class="btn p" onclick="editCand()">+ Aday</button><button class="btn" onclick="bulk()">Toplu İşlem</button>`);
  const L=S.cands.filter(c=>(!filt.cp||c.talepNo==filt.cp)&&(!filt.cs||(filt.cs==='_a'?!isClosed(c.asama):filt.cs==='_k'?isClosed(c.asama):c.asama===filt.cs))&&(!filt.cq||(c.ad+c.email+c.notlar).toLowerCase().includes(filt.cq.toLowerCase())));
@@ -228,9 +229,9 @@ V.cand=()=>{head('Adaylar (Aday Bazlı)','Talep numarası seçildiğinde pozisyo
 function editCand(id,talep){const c=id?S.cands.find(x=>x.id===id):{talepNo:talep||'',asama:'Başvuru',kvkk:false};
  modal(`<div class="row sp"><h3>${id?'Adayı Düzenle':'Yeni Aday'}</h3><button class="btn s" onclick="closeM()">✕</button></div>${form(C_F,c)}<div style="margin-top:10px"><label>Özgeçmiş (CV)</label><input type="file" id="cv" accept=".pdf,.doc,.docx"></div><p class="mut sm">${id?'Aşama değişikliği bu formdan yapılırsa otomatik e-posta tetiklenir.':'Kayıtta "Başvuru Alındı" maili otomatik gönderilir.'}</p><p class="row"><button class="btn p" onclick="saveCand('${id||''}')">Kaydet</button></p>`)}
 async function saveCand(id){const c=id?S.cands.find(x=>x.id===id):{id:uid(),created:today(),stageDate:today(),hist:[],as:{},notes:[]};const prevSt=c.asama;const tmp=readForm(C_F,{...c});
- if(!tmp.ad||!tmp.talepNo)return alert('Aday adı ve talep numarası zorunlu');
- const dup=S.cands.find(x=>x.id!==c.id&&((tmp.email&&x.email===tmp.email)||(tmp.tel&&tmp.tel.length>6&&x.tel===tmp.tel)));if(dup&&!confirm(`Olası mükerrer kayıt: ${dup.ad} (${posOf(dup).ad||''}). Yine de kaydedilsin mi?`))return;
- const f=$('cv').files[0];if(f){if(f.size>1.5e6)return alert('CV 1.5MB üzerinde; tarayıcı depolaması için küçültün.');tmp.cv={name:f.name,data:await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)})}}
+ if(!tmp.ad||!tmp.talepNo)return toast('Aday adı ve talep numarası zorunlu');
+ const dup=S.cands.find(x=>x.id!==c.id&&((tmp.email&&x.email===tmp.email)||(tmp.tel&&tmp.tel.length>6&&x.tel===tmp.tel)));if(dup&&!saveCand.ok)return ask(`Olası mükerrer kayıt: ${dup.ad} (${posOf(dup).ad||''}). Yine de kaydedilsin mi?`,()=>{saveCand.ok=1;saveCand(id).finally(()=>saveCand.ok=0)});
+ const f=$('cv').files[0];if(f){if(f.size>1.5e6)return toast('CV 1.5MB üzerinde; tarayıcı depolaması için küçültün.');tmp.cv={name:f.name,data:await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)})}}
  const newSt=tmp.asama;Object.assign(c,tmp,{asama:prevSt||'Başvuru'});
  if(!id){c.asama=newSt;c.hist.push({t:today(),m:'Aday oluşturuldu ('+newSt+')'});S.cands.push(c);log('Yeni aday: '+c.ad);trigger(c,newSt)}else if(newSt!==prevSt){if(!setStage(c,newSt))return}
  save();closeM();rerender();toast('Aday kaydedildi')}
@@ -248,7 +249,7 @@ function openCand(id){const c=S.cands.find(x=>x.id===id);if(!c)return;const p=po
  <div class="glass card" style="margin-top:16px"><h3>Notlar</h3>${(c.notes||[]).map(n=>`<div class="sm" style="margin:4px 0"><span class="mut">${n.t}</span> · ${esc(n.m)}</div>`).join('')}<div class="row" style="margin-top:8px"><input id="nt" placeholder="Not ekle..." style="flex:1"><button class="btn s" onclick="addNote('${id}')">Ekle</button></div></div>
  <div class="grid g2" style="margin-top:16px"><div class="glass card"><h3>Süreç Geçmişi</h3><div class="tl">${(c.hist||[]).slice().reverse().map(h=>`<div><span class="mut">${h.t}</span><br>${esc(h.m)}</div>`).join('')}</div></div><div class="glass card"><h3>Gönderilen E-postalar</h3><div class="tl">${S.outbox.filter(m=>m.cand===id).map(m=>`<div><span class="mut">${m.created.slice(0,10)}</span> ${esc(m.tpl)} <span class="tag ${m.status==='Gönderildi'?'t-ok':m.status==='Hata'?'t-bad':'t-warn'}">${m.status}</span></div>`).join('')||'-'}</div></div></div>`)}
 function addNote(id){const v=$('nt').value.trim();if(!v)return;const c=S.cands.find(x=>x.id===id);(c.notes=c.notes||[]).push({t:today(),m:v});save();openCand(id)}
-function anon(id){if(!confirm('Adayın kişisel verileri KVKK kapsamında anonimleştirilecek. Emin misiniz?'))return;const c=S.cands.find(x=>x.id===id);Object.assign(c,{ad:'Anonim Aday #'+id.slice(0,4),email:'',tel:'',cv:null,notlar:'',notes:[],beklenti:'',anon:true});log('KVKK anonimleştirme: '+id);save();closeD();rerender()}
+function anon(id,ok){if(!ok)return ask('Adayın kişisel verileri KVKK kapsamında anonimleştirilecek. Emin misiniz?',()=>anon(id,1));const c=S.cands.find(x=>x.id===id);Object.assign(c,{ad:'Anonim Aday #'+id.slice(0,4),email:'',tel:'',cv:null,notlar:'',notes:[],beklenti:'',anon:true});log('KVKK anonimleştirme: '+id);save();closeD();rerender()}
 function toPool(id){const c=S.cands.find(x=>x.id===id);S.refs.push({id:uid(),ad:c.ad,email:c.email,tel:c.tel,referans:c.kaynak,uygun:posOf(c).ad,notlar:c.notlar});log(c.ad+' havuza eklendi');save();toast('Aday havuzuna eklendi')}
 function bulk(){const ids=[...document.querySelectorAll('.ck:checked')].map(x=>x.value);if(!ids.length)return toast('Önce aday seçin');
  modal(`<h3>${ids.length} aday için toplu işlem</h3><label>Yeni aşama</label><select id="bs">${[...ACTIVE,...CLOSED].map(s=>`<option>${s}</option>`).join('')}</select><p class="mut sm">İlgili otomatik e-postalar her aday için tetiklenir.</p><p class="row"><button class="btn p" onclick="const s=$('bs').value;[${ids.map(i=>`'${i}'`)}].forEach(i=>setStage(S.cands.find(x=>x.id===i),s));closeM();rerender();toast('Güncellendi')">Uygula</button><button class="btn" onclick="exportSel([${ids.map(i=>`'${i}'`)}])">Seçilenleri Excel'e aktar</button></p>`)}
@@ -274,7 +275,7 @@ function ics(id){const i=S.ints.find(x=>x.id===id),c=S.cands.find(x=>x.id===i.ca
 function score(id){const i=S.ints.find(x=>x.id===id);const K=['Teknik Yetkinlik','İletişim','Problem Çözme','Kültürel Uyum','Motivasyon'];
  modal(`<h3>Değerlendirme Formu – ${esc(i.tur)}</h3><div class="fg">${K.map((k,n)=>`<div><label>${k} (1-5)</label><input type="number" min=1 max=5 id="k${n}" value="${i.k?.[n]||3}"></div>`).join('')}<div><label>Öneri</label><select id="ks">${['Olumlu','Beklemede','Olumsuz'].map(x=>`<option ${i.sonuc===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="full"><label>Geri bildirim</label><textarea id="kf">${esc(i.fb||'')}</textarea></div></div><p><button class="btn p" onclick="saveScore('${id}')">Kaydet</button></p>`)}
 function saveScore(id){const i=S.ints.find(x=>x.id===id);i.k=[0,1,2,3,4].map(n=>+$('k'+n).value);i.puan=(i.k.reduce((a,b)=>a+b)/5).toFixed(1);i.sonuc=$('ks').value;i.fb=$('kf').value;const c=S.cands.find(x=>x.id===i.cand);(c.notes=c.notes||[]).push({t:today(),m:`${i.tur} formu: ${i.sonuc} (${i.puan}/5) ${i.fb}`});save();closeM();
- if(i.sonuc==='Olumsuz'&&confirm('Olumsuz değerlendirme. Adayın süreci sonlandırılsın ve bilgilendirme maili gönderilsin mi?')){const m={'Öngörüşme':'Süreç Sonlandı - Öngörüşme','Yönetici Görüşmesi':'Süreç Sonlandı - Yönetici Görüşmesi','İnsan Kaynakları Görüşmesi':'Süreç Sonlandı - İnsan Kaynakları Görüşmesi','Üst Yönetim Görüşmesi':'Süreç Sonlandı - Üst Yönetim Görüşmesi'};setStage(c,m[i.tur])}rerender()}
+ rerender();if(i.sonuc==='Olumsuz')ask('Olumsuz değerlendirme. Adayın süreci sonlandırılsın ve bilgilendirme maili gönderilsin mi?',()=>{const m={'Öngörüşme':'Süreç Sonlandı - Öngörüşme','Yönetici Görüşmesi':'Süreç Sonlandı - Yönetici Görüşmesi','İnsan Kaynakları Görüşmesi':'Süreç Sonlandı - İnsan Kaynakları Görüşmesi','Üst Yönetim Görüşmesi':'Süreç Sonlandı - Üst Yönetim Görüşmesi'};setStage(c,m[i.tur]);rerender()})}
 
 V.appr=()=>{head('Onaylarım (Yönetici)','HR Kısa Liste → yönetici CV onayı; Kişi Onay → yönetici kişi onayı.');const sel=filt.hm||'';
  const L=S.cands.filter(c=>['HR Kısa Liste','Kişi Onay'].includes(c.asama)&&(!sel||posOf(c).yonetici===sel));
@@ -304,8 +305,8 @@ function manualMail(id){const c=S.cands.find(x=>x.id===id);modal(`<h3>${esc(c.ad
 V.career=()=>{const open=S.pos.filter(p=>p.durum==='Açık');head('Kariyer Sayfası','Adayların gördüğü başvuru ekranı. Başvurular "Başvuru" aşamasında ATS\'ye düşer.');
  $('view').innerHTML=`<div class="glass hero"><h1>${esc(S.set.sirket)}'de Kariyer</h1><p class="mut">Geleceğin enerjisini birlikte üretelim. Açık pozisyonlarımıza göz atın.</p></div><div class="grid g3" style="margin-top:16px">${open.map(p=>`<div class="glass card"><b>${esc(p.ad)}</b><div class="mut sm" style="margin:6px 0 12px">📍 ${esc(p.lokasyon)} · ${esc(p.direktorluk)}</div><button class="btn p s" onclick="apply(${p.id})">Başvur</button></div>`).join('')||'<div class="glass card mut">Şu an açık pozisyon yok.</div>'}</div>`};
 function apply(id){const p=S.pos.find(x=>x.id==id);modal(`<h3>${esc(p.ad)} – Başvuru</h3><div class="fg"><div><label>Ad Soyad *</label><input id="aa"></div><div><label>E-posta *</label><input id="ae" type="email"></div><div><label>Telefon</label><input id="at"></div><div><label>Nereden duydunuz?</label><select id="ak">${opts('kaynak','Şirket Kariyer Sitesi')}</select></div><div class="full"><label>Özgeçmiş</label><input type="file" id="cv"></div><div class="full"><label style="display:flex;gap:8px;color:var(--tx)"><input type="checkbox" id="ac" style="width:auto"> KVKK Aydınlatma Metni'ni okudum, kişisel verilerimin işe alım süreçlerinde işlenmesine açık rıza veriyorum. *</label></div></div><p><button class="btn p" onclick="doApply(${id})">Başvuruyu Gönder</button></p>`)}
-async function doApply(id){const ad=$('aa').value.trim(),em=$('ae').value.trim();if(!ad||!/^\S+@\S+\.\S+$/.test(em)||!$('ac').checked)return alert('Zorunlu alanları ve KVKK onayını tamamlayın.');
- if(S.cands.some(c=>c.email===em&&c.talepNo==id))return alert('Bu pozisyona daha önce başvurdunuz.');const f=$('cv').files[0];
+async function doApply(id){const ad=$('aa').value.trim(),em=$('ae').value.trim();if(!ad||!/^\S+@\S+\.\S+$/.test(em)||!$('ac').checked)return toast('Zorunlu alanları ve KVKK onayını tamamlayın.');
+ if(S.cands.some(c=>c.email===em&&c.talepNo==id))return toast('Bu pozisyona daha önce başvurdunuz.');const f=$('cv').files[0];
  const c={id:uid(),talepNo:id,ad,email:em,tel:$('at').value,kaynak:$('ak').value,asama:'Başvuru',kvkk:true,created:today(),stageDate:today(),hist:[{t:today(),m:'Kariyer sayfasından başvuru'}],as:{},notes:[],cv:f&&f.size<1.5e6?{name:f.name,data:await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)})}:null};
  S.cands.push(c);log('Kariyer başvurusu: '+ad);trigger(c,'Başvuru');save();closeM();nav();toast('Başvurunuz alındı, teşekkür ederiz!')}
 
@@ -339,7 +340,7 @@ async function testApi(k){saveInteg();try{await api(k,'/results/ping','GET');toa
 V.set=()=>{head('Ayarlar & Veri','Liste değerleri, Excel içe/dışa aktarım, KVKK saklama süresi.',`<button class="btn p" onclick="saveSet()">Kaydet</button>`);
  const names={pozDurum:'Pozisyon Durumu',gerekce:'Talep Gerekçesi',uzman:'İşe Alım Uzmanı',hm:'Pozisyon Yöneticisi (Hiring Manager)',kaynak:'İşe Alım Kaynağı',lokasyon:'Lokasyon',direktorluk:'Direktörlük',mudurluk:'Müdürlük',sekil:'Görüşme Şekli',mezuniyet:'Mezuniyet Seviyesi'};
  $('view').innerHTML=`<div class="grid g2"><div class="glass card"><h3>Genel</h3><label>Şirket adı</label><input id="sn" value="${esc(S.set.sirket)}"><label style="margin-top:8px">KVKK saklama süresi (gün)</label><input id="sr" type="number" value="${S.set.retention}"><p class="row"><button class="btn s" onclick="retention()">Süresi dolan sonlanmış adayları anonimleştir</button></p></div>
- <div class="glass card"><h3>Excel</h3><p class="mut sm">Mevcut "İşe Alım Takip" Excel dosyanızı (Rol Bazlı, Aday Bazlı, Referanslı Adaylar, liste sayfaları) içe aktarabilir, aynı formatta dışa aktarabilirsiniz.</p><input type="file" id="xf" accept=".xlsx,.xls"><p class="row"><button class="btn p s" onclick="importX()">İçe Aktar (birleştir)</button><button class="btn s" onclick="exportX()">Dışa Aktar</button><button class="btn s" onclick="backup()">JSON Yedek</button><button class="btn s d" onclick="if(confirm('Tüm veriler silinip demo veri yüklenecek. Emin misiniz?')){S=seed();save();rerender()}">Sıfırla</button></p></div></div>
+ <div class="glass card"><h3>Excel</h3><p class="mut sm">Mevcut "İşe Alım Takip" Excel dosyanızı (Rol Bazlı, Aday Bazlı, Referanslı Adaylar, liste sayfaları) içe aktarabilir, aynı formatta dışa aktarabilirsiniz.</p><input type="file" id="xf" accept=".xlsx,.xls"><p class="row"><button class="btn p s" onclick="importX()">İçe Aktar (birleştir)</button><button class="btn s" onclick="exportX()">Dışa Aktar</button><button class="btn s" onclick="backup()">JSON Yedek</button><button class="btn s d" onclick="ask('Tüm veriler silinip demo veri yüklenecek. Emin misiniz?',()=>{S=seed();save();rerender()})">Sıfırla</button></p></div></div>
  <div class="grid g3" style="margin-top:16px">${Object.keys(names).map(k=>`<div class="glass card"><label>${names[k]} (satır başına bir değer)</label><textarea id="L_${k}" style="min-height:140px">${esc((S.lists[k]||[]).join('\n'))}</textarea></div>`).join('')}</div>`};
 function saveSet(){S.set.sirket=$('sn').value;S.set.retention=+$('sr').value;document.querySelectorAll('[id^=L_]').forEach(t=>S.lists[t.id.slice(2)]=t.value.split('\n').map(s=>s.trim()).filter(Boolean));save();rerender();toast('Ayarlar kaydedildi')}
 function retention(){const lim=S.set.retention;let n=0;S.cands.forEach(c=>{if(isClosed(c.asama)&&!c.anon&&days(c.stageDate,today())>lim){Object.assign(c,{ad:'Anonim Aday #'+c.id.slice(0,4),email:'',tel:'',cv:null,notlar:'',notes:[],anon:true});n++}});log(`KVKK saklama: ${n} aday anonimleştirildi`);save();toast(n+' aday anonimleştirildi')}
