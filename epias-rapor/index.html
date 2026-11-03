@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piyasa Mesaj Raporu</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e5e7eb;
+          --accent:#1f6feb; --new:#fff6d6; --err:#b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1218; --card:#171b23; --text:#e6e8ec; --muted:#9aa3b2; --line:#2a303b;
+            --accent:#4c8dff; --new:#3a3315; --err:#ff7b72; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 16px; border-bottom:1px solid var(--line); display:flex; gap:12px;
+           align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; flex:1; }
+  main { padding:16px; max-width:1400px; margin:auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px; margin-bottom:14px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+  input, select, button { font:inherit; padding:7px 9px; border:1px solid var(--line); border-radius:6px;
+           background:var(--card); color:var(--text); }
+  button { cursor:pointer; background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.ghost { background:transparent; color:var(--text); border-color:var(--line); }
+  .stats { display:flex; gap:24px; flex-wrap:wrap; }
+  .stat b { display:block; font-size:22px; }
+  .stat span { color:var(--muted); font-size:12px; }
+  .tablewrap { overflow:auto; max-height:65vh; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { padding:7px 8px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { position:sticky; top:0; background:var(--card); cursor:pointer; user-select:none; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  td.wrap { white-space:normal; min-width:220px; }
+  tr.new td { background:var(--new); }
+  .muted { color:var(--muted); }
+  .err { color:var(--err); }
+  #loginCard { max-width:380px; margin:40px auto; }
+  #loginCard .row { flex-direction:column; align-items:stretch; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EPİAŞ Piyasa Mesaj Sistemi Raporu</h1>
+  <span id="status" class="muted"></span>
+  <button id="logoutBtn" class="ghost hidden">Çıkış</button>
+</header>
+
+<main>
+  <!-- Giriş -->
+  <div id="loginCard" class="card hidden">
+    <h3 style="margin-top:0">EPİAŞ Şeffaflık Girişi</h3>
+    <form id="loginForm" class="row">
+      <label>Kullanıcı adı (e-posta)<input id="user" type="email" required autocomplete="username"></label>
+      <label>Şifre<input id="pass" type="password" required autocomplete="current-password"></label>
+      <button type="submit">Giriş yap</button>
+      <div id="loginErr" class="err"></div>
+    </form>
+  </div>
+
+  <!-- Rapor -->
+  <div id="app" class="hidden">
+    <div class="card">
+      <div class="row">
+        <label>Başlangıç<input id="start" type="date"></label>
+        <label>Bitiş<input id="end" type="date"></label>
+        <label>Mesaj tipi<select id="msgType"><option value="">Tümü</option></select></label>
+        <label>Organizasyon ID<input id="orgId" type="number" placeholder="isteğe bağlı" style="width:130px"></label>
+        <label>Santral<select id="plant"><option value="">Tümü</option></select></label>
+        <label>Ara<input id="search" placeholder="org / santral / sebep"></label>
+        <button id="refreshBtn">Şimdi yenile</button>
+        <label>Dışa aktar<select id="exportType"><option>XLSX</option><option>CSV</option><option>PDF</option></select></label>
+        <button id="exportBtn" class="ghost">İndir</button>
+      </div>
+    </div>
+
+    <div class="card stats">
+      <div class="stat"><b id="sCount">–</b><span>Mesaj</span></div>
+      <div class="stat"><b id="sOrgs">–</b><span>Organizasyon</span></div>
+      <div class="stat"><b id="sLoss">–</b><span>Toplam güç kaybı (MW)</span></div>
+      <div class="stat"><b id="sNew">0</b><span>Son yenilemede yeni</span></div>
+      <div class="stat"><b id="sNext">–</b><span>Sonraki yenileme (sn)</span></div>
+    </div>
+
+    <div class="card">
+      <div id="tableErr" class="err"></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr id="thead"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const REFRESH_SEC = 60;
+const REGION_ID = 1; // TR1
+const $ = id => document.getElementById(id);
+
+const COLS = [
+  ["orgName", "Organizasyon"],
+  ["powerPlantName", "Santral"],
+  ["uevcbName", "UEVÇB"],
+  ["caseStartDate", "Olay başlangıç", "date"],
+  ["caseEndDate", "Olay bitiş", "date"],
+  ["operatorPower", "Kurulu güç (MW)", "num"],
+  ["capacityAtCaseTime", "Olay anı kapasite (MW)", "num"],
+  ["loss", "Güç kaybı (MW)", "num"],
+  ["reason", "Sebep", "wrap"],
+];
+
+let rows = [], seen = new Set(), firstLoad = true, countdown = REFRESH_SEC;
+let sortKey = "caseStartDate", sortDir = -1;
+
+// --- yardımcılar ---
+const iso = (d, endOfDay) => `${d}T${endOfDay ? "23:59:59" : "00:00:00"}+03:00`;
+const day = offset => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString("sv-SE"); };
+const fmtDate = v => v ? new Date(v).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" }) : "";
+const fmtNum = v => v == null ? "" : Number(v).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+const rowKey = r => [r.orgName, r.powerPlantName, r.uevcbName, r.caseStartDate, r.caseEndDate, r.reason].join("|");
+
+async function api(path, body) {
+  const res = await fetch("/api/" + path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (res.status === 401) { showLogin(); throw new Error("Oturum geçersiz, tekrar giriş yapın."); }
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return res;
+}
+
+function filterBody() {
+  const b = {
+    startDate: iso($("start").value), endDate: iso($("end").value, true),
+    regionId: REGION_ID, page: { number: 1, size: 10000 },
+  };
+  if ($("msgType").value) b.mesajTipId = +$("msgType").value;
+  if ($("orgId").value) b.organizationId = +$("orgId").value;
+  if ($("plant").value) b.powerPlantId = +$("plant").value;
+  return b;
+}
+
+// --- veri ---
+async function loadMessageTypes() {
+  const data = await (await api("v1/markets/data/umm-message-type-list")).json();
+  for (const t of data.items || []) $("msgType").add(new Option(t.typeName, t.id));
+}
+
+async function loadPlants() {
+  $("plant").length = 1;
+  const org = $("orgId").value;
+  if (!org) return;
+  const data = await (await api("v1/markets/data/power-plant-list-by-organization-id",
+    { startDate: iso($("start").value), organizationId: +org })).json();
+  for (const p of data.items || []) $("plant").add(new Option(`${p.name}${p.eic ? " (" + p.eic + ")" : ""}`, p.id));
+}
+
+async function refresh() {
+  countdown = REFRESH_SEC;
+  $("tableErr").textContent = "";
+  $("status").textContent = "Yükleniyor…";
+  try {
+    const data = await (await api("v1/markets/data/market-message-system", filterBody())).json();
+    let fresh = 0;
+    rows = (data.items || []).map(r => {
+      const k = rowKey(r);
+      const isNew = !firstLoad && !seen.has(k);
+      if (isNew) fresh++;
+      seen.add(k);
+      const loss = r.operatorPower != null && r.capacityAtCaseTime != null
+        ? r.operatorPower - r.capacityAtCaseTime : null;
+      return { ...r, loss, _new: isNew };
+    });
+    firstLoad = false;
+    $("sNew").textContent = fresh;
+    render();
+    $("status").textContent = "Son güncelleme: " + new Date().toLocaleTimeString("tr-TR");
+  } catch (e) {
+    $("tableErr").textContent = e.message;
+    $("status").textContent = "Hata – " + new Date().toLocaleTimeString("tr-TR");
+  }
+}
+
+function render() {
+  const q = $("search").value.toLocaleLowerCase("tr");
+  const list = rows
+    .filter(r => !q || [r.orgName, r.powerPlantName, r.uevcbName, r.reason].join(" ").toLocaleLowerCase("tr").includes(q))
+    .sort((a, b) => {
+      const x = a[sortKey], y = b[sortKey];
+      return (x == null) - (y == null) || (x > y ? 1 : x < y ? -1 : 0) * sortDir;
+    });
+
+  $("thead").innerHTML = COLS.map(([k, t]) =>
+    `<th data-k="${k}">${t}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("");
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  $("tbody").innerHTML = list.length ? list.map(r =>
+    `<tr class="${r._new ? "new" : ""}">${COLS.map(([k, , type]) =>
+      type === "date" ? `<td>${fmtDate(r[k])}</td>`
+      : type === "num" ? `<td class="num">${fmtNum(r[k])}</td>`
+      : `<td class="${type || ""}">${esc(r[k])}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${COLS.length}" class="muted">Bu filtrelerle kayıt yok.</td></tr>`;
+
+  $("sCount").textContent = list.length;
+  $("sOrgs").textContent = new Set(list.map(r => r.orgName)).size;
+  $("sLoss").textContent = fmtNum(list.reduce((s, r) => s + (r.loss || 0), 0));
+}
+
+async function exportFile() {
+  try {
+    const type = $("exportType").value;
+    const res = await api("v1/markets/export/market-message-system", { ...filterBody(), exportType: type });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = `piyasa-mesaj-${$("start").value}_${$("end").value}.${type.toLowerCase()}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { $("tableErr").textContent = "Dışa aktarma: " + e.message; }
+}
+
+// --- giriş ---
+function showLogin() { $("loginCard").classList.remove("hidden"); $("app").classList.add("hidden"); $("logoutBtn").classList.add("hidden"); }
+async function showApp() {
+  $("loginCard").classList.add("hidden"); $("app").classList.remove("hidden"); $("logoutBtn").classList.remove("hidden");
+  if ($("msgType").length === 1) loadMessageTypes().catch(e => $("tableErr").textContent = e.message);
+  refresh();
+}
+
+$("loginForm").onsubmit = async e => {
+  e.preventDefault();
+  $("loginErr").textContent = "Giriş yapılıyor…";
+  const res = await fetch("/auth/login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: $("user").value, password: $("pass").value }),
+  });
+  $("pass").value = "";
+  if (res.ok) { $("loginErr").textContent = ""; showApp(); }
+  else $("loginErr").textContent = (await res.json()).error;
+};
+$("logoutBtn").onclick = async () => { await fetch("/auth/logout", { method: "POST" }); showLogin(); };
+
+// --- olaylar ---
+$("start").value = day(-7);
+$("end").value = day(7);
+$("refreshBtn").onclick = refresh;
+$("exportBtn").onclick = exportFile;
+$("search").oninput = render;
+$("thead").onclick = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  sortDir = k === sortKey ? -sortDir : 1; sortKey = k; render();
+};
+for (const id of ["start", "end", "msgType", "plant"]) $(id).onchange = refresh;
+$("orgId").onchange = () => { loadPlants().catch(err => $("tableErr").textContent = err.message); refresh(); };
+
+setInterval(() => {
+  if ($("app").classList.contains("hidden")) return;
+  countdown--;
+  $("sNext").textContent = Math.max(countdown, 0);
+  if (countdown <= 0) refresh();
+}, 1000);
+
+fetch("/auth/status").then(r => r.json()).then(s => s.loggedIn ? showApp() : showLogin()).catch(showLogin);
+</script>
+</body>
+</html>
