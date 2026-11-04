@@ -7,7 +7,25 @@ Sistem hazırdır. Canlıya almak için yalnızca `api-config.js` doldurulur.
 (SharePoint, intranet, Azure Static Web Apps). claude.ai bağlantısı yalnızca demo içindir;
 orada dış adreslere istek gönderilemez.
 
-## 2. Outlook e-posta (Power Automate)
+## 2a. Gmail ile e-posta (ücretsiz)
+1. https://script.google.com → **Yeni proje** → `gmail-apps-script.gs` içeriğini yapıştırın.
+2. `SECRET` değerini kendinize özel uzun bir şifreyle değiştirin → Kaydet.
+3. **Dağıt → Yeni dağıtım** → tür: **Web uygulaması** → Yürüten: **Ben** → Erişimi olan: **Herkes** → Dağıt.
+4. Google izin ister → hesabınızı seçin → *Gelişmiş → (proje adı)'na git* → İzin ver.
+5. Çıkan `https://script.google.com/macros/s/.../exec` adresini kopyalayın.
+6. `api-config.js`:
+   ```js
+   demo: false,
+   gonderen: 'sizin.adresiniz@gmail.com',
+   mail: { mode: 'gmail', url: 'https://script.google.com/macros/s/.../exec', key: 'SECRET ile aynı' },
+   ```
+7. `index.html`'i açın → **Entegrasyonlar → Test Maili Gönder**. Test maili gonderen adresine gelir.
+
+Notlar:
+- Kişisel Gmail ile günde yaklaşık 100 alıcıya, Google Workspace ile yaklaşık 1.500 alıcıya gönderim yapılabilir.
+- Script kodunu değiştirirseniz yeni sürüm oluşturun: *Dağıt → Dağıtımları yönet → Düzenle → Yeni sürüm*.
+
+## 2b. Outlook e-posta (Power Automate)
 1. Power Automate → Yeni akış → **Anlık bulut akışı** → tetikleyici: *When an HTTP request is received*.
 2. İstek gövdesi şeması:
    ```json

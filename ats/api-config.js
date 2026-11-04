@@ -14,13 +14,13 @@ window.ATS_CONFIG = {
   // Aday "Sınav Aşaması"na geçince 3 sınav daveti otomatik oluşturulsun mu?
   autoInvite: true,
 
-  // 1) OUTLOOK E-POSTA – tüm otomatik bilgilendirme mailleri
+  // 1) E-POSTA – tüm otomatik bilgilendirme mailleri (Gmail için: gmail-apps-script.gs ve KURULUM.md)
   //    Power Automate: "When an HTTP request is received" → "Send an email (V2)"
   //    Gelen veri: { from, to, subject, text }
   mail: {
-    mode: 'webhook',          // 'webhook' (otomatik) | 'mailto' (Outlook taslağı açar)
-    url: '',                  // Power Automate HTTP POST URL'si
-    key: ''                   // gerekmiyorsa boş bırakın
+    mode: 'webhook',          // 'gmail' (Google Apps Script) | 'webhook' (Power Automate/Outlook) | 'mailto' (taslak açar)
+    url: '',                  // gmail: Apps Script .../exec URL'si  |  webhook: Power Automate HTTP POST URL'si
+    key: ''                   // gmail: script içindeki SECRET ile aynı  |  webhook: gerekmiyorsa boş
   },
 
   // 2) OUTLOOK TAKVİM – "Mülakat Planla" ile aday + görüşmeciye toplantı daveti
