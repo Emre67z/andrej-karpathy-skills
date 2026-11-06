@@ -24,7 +24,10 @@
   .msg-err { color:var(--err); font-weight:600; }
   #warnings { background:var(--warnbg); border-color:#f0d58c; }
   #warnings h2 { font-size:15px; margin:0 0 8px; color:var(--warn); }
-  #warnings ul { margin:0; padding-left:20px; max-height:220px; overflow:auto; }
+  #warnings ul, #groups ul { margin:0; padding-left:20px; max-height:220px; overflow:auto; }
+  #groups h2 { font-size:15px; margin:0 0 4px; }
+  #groups p { margin:0 0 8px; }
+  #groups summary { cursor:pointer; }
   .tablewrap { overflow:auto; max-height:60vh; border:1px solid var(--line); border-radius:8px; }
   table { border-collapse:collapse; width:100%; background:#fff; }
   th, td { border-bottom:1px solid var(--line); padding:6px 10px; text-align:left; white-space:nowrap; }
@@ -58,6 +61,12 @@
   <div class="card hidden" id="warnings">
     <h2>Kontrol edilmesi gerekenler</h2>
     <ul id="warnlist"></ul>
+  </div>
+
+  <div class="card hidden" id="groups">
+    <h2>İsim yerine yazılmış grup ifadeleri</h2>
+    <p class="stats">Bu ifadeler, dosyadaki Birimi / Görev Alanı / Ünvanı sütunlarına göre kişilere açıldı (kişinin kendisi hariç). Kim olduğunu görmek için tıklayın.</p>
+    <ul id="grouplist"></ul>
   </div>
 
   <div class="card hidden" id="preview">
@@ -141,7 +150,12 @@ function findHeader(rows) {
     if (person < 0) continue;
     const cols = {};
     LEVELS.forEach(l => { cols[l.key] = heads.findIndex(l.match); });
-    return { row: r, person, cols, combined: heads.findIndex(isCombinedHeader) };
+    return {
+      row: r, person, cols, combined: heads.findIndex(isCombinedHeader),
+      birim: heads.indexOf('birimi'),
+      unvan: heads.findIndex(h => h === 'ünvanı' || h === 'unvanı'),
+      alan: heads.indexOf('görevalanı'),
+    };
   }
   return null;
 }
@@ -164,13 +178,36 @@ function run() {
   const warnings = [];
   const people = [];
 
-  // Kişi -> İlk Amiri (AST/PAYDAŞ ayrımı için).
+  // Kişi -> İlk Amiri (AST/PAYDAŞ ayrımı için) ve grup ifadeleri için personel listesi.
   const firstBoss = new Map();
+  const staff = [];
+  const cell = (row, c) => c >= 0 ? keyName(row[c]) : '';
   for (let r = hdr.row + 1; r < rows.length; r++) {
     const row = rows[r] || [];
     const p = cleanName(row[hdr.person]);
-    if (p) firstBoss.set(keyName(p), splitNames(row[hdr.cols.ilk]).map(keyName));
+    if (!p) continue;
+    firstBoss.set(keyName(p), splitNames(row[hdr.cols.ilk]).map(keyName));
+    staff.push({ name: p, k: keyName(p), birim: cell(row, hdr.birim), alan: cell(row, hdr.alan), unvan: stemWords(cell(row, hdr.unvan)) });
   }
+  const canExpand = hdr.birim >= 0 && hdr.unvan >= 0 && hdr.alan >= 0;
+  const groups = new Map();
+
+  // Bir hücredeki isimleri döndürür; grup ifadelerini (ör. "... KAZAN BİRİMİ USTALARI") kişilere açar.
+  const expand = (items, person, r, col) => items.flatMap(ev => {
+    if (firstBoss.has(keyName(ev)) || !isGroupPhrase(ev)) return [ev];
+    if (!canExpand) {
+      warnings.push(`Satır ${r + 1}: "${ev}" grup ifadesi gibi görünüyor ama Birimi / Ünvanı / Görev Alanı sütunları bulunamadı — isim olarak yazıldı.`);
+      return [ev];
+    }
+    const me = staff.find(s => s.k === keyName(person));
+    const g = resolveGroup(ev, staff, me);
+    const gk = `${col}|${keyName(ev)}|${g.birim}`;
+    if (!groups.has(gk)) groups.set(gk, { phrase: cleanName(ev), col, scope: g.scope, names: g.members.map(s => s.name), rows: [] });
+    groups.get(gk).rows.push(r + 1);
+    const members = g.members.filter(s => s.k !== keyName(person));
+    if (!members.length) warnings.push(`Satır ${r + 1}: "${ev}" ifadesine uyan personel bulunamadı — atlandı.`);
+    return members.map(s => s.name);
+  });
 
   for (let r = hdr.row + 1; r < rows.length; r++) {
     const row = rows[r] || [];
@@ -182,10 +219,10 @@ function run() {
     }
     people.push(person);
     const names = {};
-    required.forEach(l => { names[l.key] = splitNames(row[hdr.cols[l.key]]); });
+    required.forEach(l => { names[l.key] = expand(splitNames(row[hdr.cols[l.key]]), person, r, l.label); });
     if (useCombined) {
       names.ast = []; names.paydas = [];
-      splitNames(row[hdr.combined]).forEach(ev => {
+      expand(splitNames(row[hdr.combined]), person, r, 'AST/PAYDAŞ').forEach(ev => {
         const boss = firstBoss.get(keyName(ev));
         if (!boss) warnings.push(`Satır ${r + 1}: ${person} için "${ev}" Ad - Soyad listesinde yok; AST mı PAYDAŞ mı belirlenemedi — PAYDAŞ yazıldı.`);
         (boss && boss.includes(keyName(person)) ? names.ast : names.paydas).push(ev);
@@ -220,19 +257,78 @@ function run() {
     }
   });
 
-  render(warnings);
+  render(warnings, [...groups.values()]);
 }
 
+/* ---- Grup ifadesi kuralları ----
+   Bir hücredeki ifade listede bir kişi değilse ve çoğul ("-LARI / -LERİ") içeriyorsa grup sayılır:
+     [Birimi] [Görev Alanı] [BİRİMİ] <Ünvan çoğulu> [VE <Ünvan çoğulu>]
+   1. Baştaki Birimi yazılmamışsa değerlendirilen kişinin kendi Birimi kullanılır.
+   2. Görev Alanı yazılmamışsa birimdeki tüm görev alanları dahildir.
+   3. Ünvan çoğulu tekile çevrilir ve personelin Ünvanı'nın sonuyla eşleştirilir:
+      "USTALARI" → "...USTASI", "USTA YARDIMCILARI" → "...USTA YARDIMCISI",
+      "MEKANİK BAKIM UZMANLARI" → "MEKANİK BAKIM UZMANI" (OPERASYON UZMANI hariç).
+   4. "USTA VE USTA YARDIMCILARI" gibi "VE" ile bağlanan ünvanların her biri ayrı eşleştirilir.
+   5. Değerlendirilen kişinin kendisi gruptan çıkarılır. */
+const isGroupPhrase = s => /(ları|leri)(\s|$)/.test(keyName(s));
+
+// Son kelimedeki çoğul / iyelik ekini atar: "ustaları"→"usta", "ustası"→"usta", "uzmanı"→"uzman".
+function stemWords(s) {
+  const w = s.split(' ').filter(Boolean);
+  if (!w.length) return w;
+  const last = w[w.length - 1];
+  const rule = [/(ları|leri)$/, /(?<=[aeıioöuü])(sı|si|su|sü)$/, /(?<=[^aeıioöuü])(ı|i|u|ü)$/].find(re => re.test(last));
+  if (rule) w[w.length - 1] = last.replace(rule, '');
+  return w;
+}
+
+const endsWith = (a, b) => b.length > 0 && b.length <= a.length && b.every((x, i) => a[a.length - b.length + i] === x);
+
+function resolveGroup(phrase, staff, me) {
+  let s = keyName(phrase);
+  const byLen = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => b.length - a.length);
+  const birim = byLen(staff.map(x => x.birim)).find(b => s.startsWith(b + ' '));
+  if (birim) s = s.slice(birim.length + 1);
+  const alan = byLen(staff.map(x => x.alan)).find(a => s.startsWith(a + ' '));
+  if (alan) s = s.slice(alan.length + 1).replace(/^birimi\s+/, '');
+  const titles = s.split(/\s+ve\s+/).map(stemWords);
+  const scopeBirim = birim ?? me?.birim ?? '';
+  const members = staff.filter(x => x.birim === scopeBirim && (!alan || x.alan === alan) && titles.some(t => endsWith(x.unvan, t)));
+  const scope = `Birimi: ${scopeBirim.toLocaleUpperCase('tr')}${birim ? '' : ' (kişinin kendi birimi)'} · Görev Alanı: ${alan ? alan.toLocaleUpperCase('tr') : 'TÜMÜ'} · Ünvan: ${titles.map(t => t.join(' ').toLocaleUpperCase('tr')).join(' + ')}`;
+  return { birim: scopeBirim, members, scope };
+}
+
+// Harf yer değiştirmesini de 1 hata sayan düzenleme mesafesi ("MEHEMT" ~ "MEHMET").
 function distance(a, b) {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
   for (let j = 1; j <= b.length; j++) d[0][j] = j;
   for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++)
+    for (let j = 1; j <= b.length; j++) {
       d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i-1] === b[j-2] && a[i-2] === b[j-1]) d[i][j] = Math.min(d[i][j], d[i-2][j-2] + 1);
+    }
   return d[a.length][b.length];
 }
 
-function render(warnings) {
+function render(warnings, groups = []) {
+  const gl = $('grouplist');
+  gl.innerHTML = '';
+  groups.forEach(g => {
+    const li = document.createElement('li');
+    const det = document.createElement('details');
+    const sum = document.createElement('summary');
+    sum.textContent = `[${g.col}] "${g.phrase}" → ${g.names.length} kişi (satır: ${g.rows.join(', ')})`;
+    const p = document.createElement('div');
+    p.className = 'stats';
+    p.textContent = g.scope;
+    const names = document.createElement('div');
+    names.textContent = g.names.join(', ') || '— eşleşen kimse yok —';
+    det.append(sum, p, names);
+    li.appendChild(det);
+    gl.appendChild(li);
+  });
+  $('groups').classList.toggle('hidden', !groups.length);
+
   const tb = $('tbody');
   tb.innerHTML = '';
   const frag = document.createDocumentFragment();
