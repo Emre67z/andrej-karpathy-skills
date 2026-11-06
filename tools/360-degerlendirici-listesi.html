@@ -80,10 +80,12 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 const LEVELS = [
   { key: 'ilk',    label: 'Bağlı Olduğu İlk Amir', match: h => h.includes('ilkamir') },
   { key: 'ikinci', label: 'Bağlı Olduğu 2. Amir',  match: h => h.includes('2amir') },
-  { key: 'ast',    label: 'AST',    match: h => h.includes('çalışmaarkadaşıast') },
-  { key: 'es',     label: 'EŞ',     match: h => h.includes('çalışmaarkadaşıeş') },
-  { key: 'paydas', label: 'PAYDAŞ', match: h => h.includes('çalışmaarkadaşıpaydaş') },
+  { key: 'ast',    label: 'AST',    match: h => h === 'çalışmaarkadaşıast' },
+  { key: 'es',     label: 'EŞ',     match: h => h === 'çalışmaarkadaşıeş' },
+  { key: 'paydas', label: 'PAYDAŞ', match: h => h === 'çalışmaarkadaşıpaydaş' },
 ];
+// Birleşik "Çalışma Arkadaşı(AST/PAYDAŞ)" sütunu: isim, İlk Amiri değerlendirilen kişi ise AST, değilse PAYDAŞ.
+const isCombinedHeader = h => h === 'çalışmaarkadaşıastpaydaş';
 const isPersonHeader = h => h === 'adsoyad';
 const normHeader = s => String(s ?? '').toLocaleLowerCase('tr').replace(/[^\p{L}\p{N}]/gu, '');
 const cleanName = s => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -139,7 +141,7 @@ function findHeader(rows) {
     if (person < 0) continue;
     const cols = {};
     LEVELS.forEach(l => { cols[l.key] = heads.findIndex(l.match); });
-    return { row: r, person, cols };
+    return { row: r, person, cols, combined: heads.findIndex(isCombinedHeader) };
   }
   return null;
 }
@@ -150,27 +152,49 @@ function run() {
   const rows = sheetRows($('sheet').value);
   const hdr = findHeader(rows);
   if (!hdr) { showError('Bu sayfada "Ad - Soyad" başlığı bulunamadı.'); render([]); return; }
-  const missing = LEVELS.filter(l => hdr.cols[l.key] < 0).map(l => l.label);
+  // Birleşik AST/PAYDAŞ sütunu varsa ayrı AST ve PAYDAŞ sütunları aranmaz.
+  const useCombined = hdr.combined >= 0 && (hdr.cols.ast < 0 || hdr.cols.paydas < 0);
+  const required = LEVELS.filter(l => !(useCombined && (l.key === 'ast' || l.key === 'paydas')));
+  const missing = required.filter(l => hdr.cols[l.key] < 0).map(l => l.label);
   if (missing.length) { showError('Bulunamayan sütun(lar): ' + missing.join(', ')); render([]); return; }
+  const dataCols = [...required.map(l => hdr.cols[l.key]), ...(useCombined ? [hdr.combined] : [])];
 
   const upper = $('upper').checked;
   const fmt = s => upper ? s.toLocaleUpperCase('tr') : s;
   const warnings = [];
   const people = [];
 
+  // Kişi -> İlk Amiri (AST/PAYDAŞ ayrımı için).
+  const firstBoss = new Map();
+  for (let r = hdr.row + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const p = cleanName(row[hdr.person]);
+    if (p) firstBoss.set(keyName(p), splitNames(row[hdr.cols.ilk]).map(keyName));
+  }
+
   for (let r = hdr.row + 1; r < rows.length; r++) {
     const row = rows[r] || [];
     const person = cleanName(row[hdr.person]);
     if (!person) {
-      const hasData = LEVELS.some(l => cleanName(row[hdr.cols[l.key]]));
+      const hasData = dataCols.some(c => cleanName(row[c]));
       if (hasData) warnings.push(`Satır ${r + 1}: Ad - Soyad boş ama değerlendirici yazılmış — atlandı.`);
       continue;
     }
     people.push(person);
+    const names = {};
+    required.forEach(l => { names[l.key] = splitNames(row[hdr.cols[l.key]]); });
+    if (useCombined) {
+      names.ast = []; names.paydas = [];
+      splitNames(row[hdr.combined]).forEach(ev => {
+        const boss = firstBoss.get(keyName(ev));
+        if (!boss) warnings.push(`Satır ${r + 1}: ${person} için "${ev}" Ad - Soyad listesinde yok; AST mı PAYDAŞ mı belirlenemedi — PAYDAŞ yazıldı.`);
+        (boss && boss.includes(keyName(person)) ? names.ast : names.paydas).push(ev);
+      });
+    }
     const seen = new Map();
     let count = 0;
     LEVELS.forEach(l => {
-      splitNames(row[hdr.cols[l.key]]).forEach(ev => {
+      names[l.key].forEach(ev => {
         const k = keyName(ev);
         if (k === keyName(person)) warnings.push(`Satır ${r + 1}: ${person} kendisini değerlendiren olarak listelenmiş (${l.label}).`);
         if (seen.has(k)) warnings.push(`Satır ${r + 1}: ${person} için "${ev}" birden fazla kez yazılmış (${seen.get(k)} ve ${l.label}).`);
